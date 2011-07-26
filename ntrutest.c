@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include "ntrutest.h"
 
+
+
+
 void printPolynomial(int32_t *pol, int32_t N)
 {
 	if(pol == NULL)
@@ -353,10 +356,11 @@ int32_t testWritePriv(int32_t N, int32_t p, int32_t q0, int32_t r, int32_t df, i
 	uint8_t *priv, *pub;
 	int32_t privlength, publength;
 
+	int32_t k = mod(N,12);
 
 	/* write private and public key */
-	writePrivate(&priv, &privlength, f, Fp, N, p, q);
-	writePublic(&pub, &publength, h, N, p, q, d);
+	writePrivate(&priv, &privlength, f, Fp, N, p, q, k);
+	writePublic(&pub, &publength, h, N, p, q, d, k);
 
 	int32_t flag = 1;
 	
@@ -500,7 +504,7 @@ int32_t testntru()
 	printf("*************************************************************\n");
 
 
-	uint8_t *input = (uint8_t*)"AA BB CC DD EE aölfkjasdföakjsdfhlasdhjflasfjdhalsfhjdasldfhkjalsdfjhasldfkjhasldfkjhasldfkjhasdflkjhaasdfasdlkjdfsakljhfdkjhfsdkhjhjkkjhllllllllllllllllllllasdfhlkjashdflajsdhflkasdjfhalsdfhjasldfjhasldfkjhasdlfkjhasdflkjahsdlfkjhasdflkahdsfaldhfjasldfhjasldfhjkasldfkjhasdlfkjhasdflkahsdflahfjsdaldfhsjalsdfjhasldfkjhasdlfjkhasldfjkhasldfkjhasdlfkjhasdlfkajhsdlfkahsdjflahjsdfasldfhjasldfkhjasdlfkjhasdlfkjhasdlfkjhasdflkjahsdflkahsdfalsfdhjalsdfhjasdlfhkjasdlfhkj";
+	uint8_t *input = (uint8_t*)"AA BB CC DD EE aölfkjasdföakjsdfhlasdhjflasfjdhalsfhjdasldfhkjalsdfjhasldfkjhasldfkjhasldfkjhasdflkjhaasdfasdlkjdfsakljhfdkjhfsdkhjhjkkjhllllllllllllllllllllasdfhlkjashdflajsdhflkasdjfhalsdfhjasldfjhasldfkjhasdlfkjhasdflkjahsdlfkjhasdflkahdsfaldhfjasldfhjasldfhjkasldfkjhasdlfkjhasdflkahsdflahfjsdaldfhsjalsdfjhasldfkjhasdlfjkhasldfjkhasldfkjhasdlfkjhasdlfkajhsdlfkahsdjflahjsdfasldfhjasldfkhjasdlfkjhasdlfkjhasdlfkjhasdflkjahsdflkahsdfalsfdhjalsdfhjasdlfhkjasdlfhkjsdfasdfkjahsdfgkashdfgakshfdjgakhfsdgaksdhfgaksdhfjgaskdfhjgasdfiuzweriowuerlsdkflkasdhfglkasghlkjhsjhXXX";
 
 	printf("%s\n", (char*)input);
 	

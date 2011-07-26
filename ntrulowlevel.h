@@ -13,6 +13,11 @@
 #include <gmp.h>
 #include <stdint.h>
 
+/* modulo operation that only returns positive values 
+ * returns: k mod N
+ */
+int32_t mod(int32_t k, int32_t N);
+
 
 /* generate a random polynomial with coefficients in {-1, 0, 1}
  * *polynomial: random polynomial (sufficient memory already allocated)

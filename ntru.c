@@ -647,12 +647,12 @@ void writePrivate(uint8_t **privatekey, int32_t *length, int32_t *f, int32_t *F_
 	i += 4;
 	writeIntToBuffer(&(buffer[i]), binlenF_p);
 	i += 4;
-	int32_t k;
-	for(k = 0; k < binlenf; k++)
-		buffer[i + k] = binf[k];
+	int32_t l;
+	for(l = 0; l < binlenf; l++)
+		buffer[i + l] = binf[l];
 	i += binlenf;
-	for(k = 0; k < binlenF_p; k++)
-		buffer[i + k] = binF_p[k];
+	for(l = 0; l < binlenF_p; l++)
+		buffer[i + l] = binF_p[l];
 	
 	/* return values */
 	*length = bufferlen;
@@ -691,9 +691,9 @@ void writePublic(uint8_t **publickey, int32_t *length, int32_t *h, int32_t N, in
 	i += 4;
 	writeIntToBuffer(&(buffer[i]), binlenh);
 	i += 4;
-	int32_t k;
-	for(k = 0; k < binlenh; k ++)
-		buffer[i + k] = binh[k];
+	int32_t l;
+	for(l = 0; l < binlenh; l ++)
+		buffer[i + l] = binh[l];
 	
 	/* return values */
 	*length = bufferlen;
@@ -1166,16 +1166,45 @@ int32_t NTRU_Decrypt(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint8_t *encr
 
 	free(e);
 	/* check if decryption is possible,
-	 * coefficients have to be in (-q/2, ..., q/2] */
-	int32_t q2 = d_ctx->q / 2;
+	 * coefficients have to be in (A, ..., A+q-1] (see thesis) */
+	/* first guess for A = -q/2, second guess A' = A + 1 */
+	int32_t A = d_ctx->q / 2;
+	int32_t success = 1;
 	for(i = 0; i < d_ctx->N; i++)
-		if(a[i] > q2) a[i] -= 2*q2;
-	
-	/* decryption successful, retrieve plaintext m */
+		if(a[i] > A) a[i] -= d_ctx->q;
 	/* m = F_p * a mod p */
 	cyclicConvolutionMod(ret->polynomial, d_ctx->F_p, a, d_ctx->N, d_ctx->p);
+	/* validate checkbits */
+	for(i = d_ctx->N - d_ctx->k; i < d_ctx->N; i++)
+	{
+		if(ret->polynomial[i] != 1)
+		{
+			/* FAILURE */
+			success = 0;
+			break;
+		}
+	}
+	if(!success)
+	{
+		success = 1;
+		/* A' = A + 1 -> every coefficient a[i] += 1 */
+		for(i = 0; i < d_ctx->N; i++)
+			a[i] += 1;
+		cyclicConvolutionMod(ret->polynomial, d_ctx->F_p, a, d_ctx->N, d_ctx->p);
+		/* validate checkbits */
+		for(i = d_ctx->N - d_ctx->k; i < d_ctx->N; i++)
+		{
+			if(ret->polynomial[i] != 1)
+			{
+				/* FAILURE */
+				success = 0;
+				free(ret->polynomial);
+				break;
+			}
+		}
+	}
 	free(a);
-	return 1; /* True */
+	return success;
 }
 
 void NTRU_Encrypt_Preprocess_Update(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **cons, int32_t *count, uint8_t *plaintext, int32_t plainlength)
@@ -1315,16 +1344,13 @@ void NTRU_Decrypt_Postprocess(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint
 		/* extract information from con */
 		/* read a multiple of 12 digits */
 		/* how much have we? curCount + number of valid coefficients
-		 * (from con), max N */
-		int32_t numCoeffs = curCount + d_ctx->N -
-			con->trailingZeroCoefficients; /* != 0 in last package */
-		/*TODO DEBUG */
-		/*printf("valid Coeffs: [%d]\n", numCoeffs);*/
-		/*******************/
+		 * (from con), max N-k (last k are checkbits) */
+		int32_t numCoeffs = curCount + d_ctx->N - d_ctx->k
+			- con->trailingZeroCoefficients; /* != 0 in last package */
 		/* != 0 in last package */
 		d_ctx->base3_trailing = con->trailingZeroBits;
 
-		/* should be multiple of 12, but hold at least last 12 back
+		/* should be multiple of 12, but hold back at least the last 12
 		 * for we possibly need to cut trailing bits in base 3
 		 * conversion */
 		numCoeffs = numCoeffs - mod(numCoeffs, 12) - 12;
@@ -1339,20 +1365,20 @@ void NTRU_Decrypt_Postprocess(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint
 			free(d_ctx->coefficients);
 		
 		/* fill up with digits from con */
-		int32_t k = 0;
+		int32_t l = 0;
 		for(; i < numCoeffs; i++)
 		{
-			coeffs[i] = (con->polynomial)[k];
-			k++;
+			coeffs[i] = (con->polynomial)[l];
+			l++;
 		}
 
 		/* store remainig coefficients in d_ctx->coefficients */
-		d_ctx->coefficients = (int32_t*)malloc((d_ctx->N - k) *
+		d_ctx->coefficients = (int32_t*)malloc((d_ctx->N - l) *
 				sizeof(int32_t));
 		i = 0;
-		for(; k < d_ctx->N; k++)
+		for(; l < d_ctx->N - d_ctx->k; l++)
 		{
-			(d_ctx->coefficients)[i] = (con->polynomial)[k];
+			(d_ctx->coefficients)[i] = (con->polynomial)[l];
 			i++;
 		}
 		d_ctx->coefficientCount = i - con->trailingZeroCoefficients;
@@ -1364,8 +1390,6 @@ void NTRU_Decrypt_Postprocess(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint
 	}
 	else
 	{
-		/* TODO: DEBUG */
-		/*printf("[FINAL]\n");*/
 		/**************/
 		/* DEBUG */
 		if(d_ctx->coefficientCount % 12)
