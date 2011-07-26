@@ -10,11 +10,6 @@
 
 
 
-/* modulo operation that only returns positive values 
- * returns: k mod N
- */
-int32_t mod(int32_t k, int32_t N);
-
 /* divide a polynomial by x in Z[x]/(x^N - 1) (i.e. cyclic shift)
  * remark: this will only be called in this context with
  * polynomial[0] == 0
