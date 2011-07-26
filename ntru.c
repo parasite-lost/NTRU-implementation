@@ -47,9 +47,13 @@ void NTRU_GenKeys(uint8_t **privatekey, int32_t *privlength, uint8_t **publickey
 	/* compute public key h = F_q * g */
 	cyclicConvolutionMod(h, F_q, g, N, q);
 	
+	/* compute number of checkbits
+	 * for simplicity: q*12 + k = N, k minimal. so encoded data (12 integer blocks) fits perfectly into NTRU polynomial */
+	int32_t k = mod(N, 12);
+
 	/* write private and public key */
-	writePrivate(privatekey, privlength, f, F_p, N, p, q);
-	writePublic(publickey, publength, h, N, p, q, d);
+	writePrivate(privatekey, privlength, f, F_p, N, p, q, k);
+	writePublic(publickey, publength, h, N, p, q, d, k);
 
 
 
@@ -616,7 +620,7 @@ void exportMPZ(mpz_t *number, uint8_t **bin, int32_t *length)
 	return;
 }
 
-void writePrivate(uint8_t **privatekey, int32_t *length, int32_t *f, int32_t *F_p, int32_t N, int32_t p, int32_t q)
+void writePrivate(uint8_t **privatekey, int32_t *length, int32_t *f, int32_t *F_p, int32_t N, int32_t p, int32_t q, int32_t k)
 {
 	uint8_t *buffer;
 	int32_t bufferlen;
@@ -628,7 +632,7 @@ void writePrivate(uint8_t **privatekey, int32_t *length, int32_t *f, int32_t *F_
 	polynomialToBinary(&binF_p, &binlenF_p, F_p, N, p);
 	/* compute length of buffer and allocate the according amount of memory
 	 * writing N, p, q, binlenf, binlenF_p, binf, binF_p to buffer */
-	bufferlen = 20 + binlenf + binlenF_p;
+	bufferlen = 24 + binlenf + binlenF_p;
 	buffer = (uint8_t*)malloc(bufferlen * sizeof(uint8_t));
 	int32_t i = 0;
 	writeIntToBuffer(&(buffer[i]), N);
@@ -636,6 +640,8 @@ void writePrivate(uint8_t **privatekey, int32_t *length, int32_t *f, int32_t *F_
 	writeIntToBuffer(&(buffer[i]), p);
 	i += 4;
 	writeIntToBuffer(&(buffer[i]), q);
+	i += 4;
+	writeIntToBuffer(&(buffer[i]), k);
 	i += 4;
 	writeIntToBuffer(&(buffer[i]), binlenf);
 	i += 4;
@@ -658,7 +664,7 @@ void writePrivate(uint8_t **privatekey, int32_t *length, int32_t *f, int32_t *F_
 	return;
 }
 
-void writePublic(uint8_t **publickey, int32_t *length, int32_t *h, int32_t N, int32_t p, int32_t q, int32_t d)
+void writePublic(uint8_t **publickey, int32_t *length, int32_t *h, int32_t N, int32_t p, int32_t q, int32_t d, int32_t k)
 {
 	/* buffer for public key h */
 	uint8_t *binh;
@@ -669,8 +675,8 @@ void writePublic(uint8_t **publickey, int32_t *length, int32_t *h, int32_t N, in
 	polynomialToBinary(&binh, &binlenh, h, N, q);
 	
 	/* compute needed length of buffer and allocate the memory 
-	 * writing N, p, q, binlenh, binh to buffer */
-	int32_t bufferlen = 20 + binlenh;
+	 * writing N, p, q, k, binlenh, binh to buffer */
+	int32_t bufferlen = 24 + binlenh;
 	uint8_t *buffer = (uint8_t*)malloc(bufferlen * sizeof(uint8_t));
 	int32_t i = 0;
 	writeIntToBuffer(&(buffer[i]), N);
@@ -680,6 +686,8 @@ void writePublic(uint8_t **publickey, int32_t *length, int32_t *h, int32_t N, in
 	writeIntToBuffer(&(buffer[i]), q);
 	i += 4;
 	writeIntToBuffer(&(buffer[i]), d);
+	i += 4;
+	writeIntToBuffer(&(buffer[i]), k);
 	i += 4;
 	writeIntToBuffer(&(buffer[i]), binlenh);
 	i += 4;
@@ -704,6 +712,8 @@ void readPrivate(NTRU_Decrypt_ctx *d_ctx, uint8_t *priv)
 	d_ctx->p = readIntFromBuffer(&(priv[i]));
 	i += 4;
 	d_ctx->q = readIntFromBuffer(&(priv[i]));
+	i += 4;
+	d_ctx->k = readIntFromBuffer(&(priv[i]));
 	i += 4;
 	int32_t binlenf = readIntFromBuffer(&(priv[i]));
 	i += 4;
@@ -739,6 +749,8 @@ void readPublic(NTRU_Encrypt_ctx *e_ctx, uint8_t *pub)
 	e_ctx->q = readIntFromBuffer(&(pub[i]));
 	i += 4;
 	e_ctx->d = readIntFromBuffer(&(pub[i]));
+	i += 4;
+	e_ctx->k = readIntFromBuffer(&(pub[i]));
 	i += 4;
 	/* read length of pupblic key h from buffer */
 	int32_t binlenh = readIntFromBuffer(&(pub[i]));
@@ -1086,27 +1098,16 @@ void NTRU_Encrypt(NTRU_Encrypt_ctx *e_ctx, NTRU_Container *con, uint8_t **encryp
 	cyclicConvolutionMod(e, r, e_ctx->h, e_ctx->N, e_ctx->q);
 	free(r);
 	/* e = p * r * h  + m mod q */
-	/* TODO: DEBUG */
-	/*printf("[ENCRYPT] e = \n");*/
 	for(i = 0; i < e_ctx->N; i++)
 	{
 		e[i] = mod(e[i] + m[i], e_ctx->q);
-		/* DEBUG **/
-		/*printf("%d, ", e[i]);*/
 	}
-	/*printf("\n");*/
-	/******************/
 
 	/* convert polynomial e to binary data */
 	uint8_t *buffer;
 	int32_t length;
 	polynomialToBinary(&buffer, &length, e, e_ctx->N, e_ctx->q);
 
-	/*DEBUG ******/
-	/*printf("[ENCRYPT] trailingCoeff: [%d]\n[ENCRYPT] trailingBits: [%d]\n",*/
-			/*con->trailingZeroCoefficients, con->trailingZeroBits);*/
-	/*printf("[ENCRYPT] length: [%d]\n", length);*/
-	/*****************/
 	/* writing con->trailingZeroCoefficients
 	 *         con->trailingZeroBits
 	 *         length
@@ -1146,12 +1147,6 @@ int32_t NTRU_Decrypt(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint8_t *encr
 	ret->trailingZeroBits = readIntFromBuffer(&(encrypted[4]));
 	length = readIntFromBuffer(&(encrypted[8]));
 
-	/* DEBUG *************/
-	/*printf("[DECRYPT] trailingCoefficients: [%d]\n",*/
-			/*ret->trailingZeroCoefficients);*/
-	/*printf("[DECRYPT] trailingBits: [%d]\n", ret->trailingZeroBits);*/
-	/*printf("[DECRYPT] length: [%d]\n", length);*/
-	/*********************/
 
 	/* check for corruption enclength != length + 12 */
 	if(length + 12 != enclength) 
@@ -1168,10 +1163,6 @@ int32_t NTRU_Decrypt(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint8_t *encr
 
 	cyclicConvolutionMod(a, d_ctx->f, e, d_ctx->N, d_ctx->q);
 
-	/*printf("[DECRYPT] e = \n");*/
-	/*for(i = 0; i < d_ctx->N; i++)*/
-		/*printf("%d, ", e[i]);*/
-	/*printf("\n");*/
 
 	free(e);
 	/* check if decryption is possible,
@@ -1179,18 +1170,7 @@ int32_t NTRU_Decrypt(NTRU_Decrypt_ctx *d_ctx, NTRU_Container *con, uint8_t *encr
 	int32_t q2 = d_ctx->q / 2;
 	for(i = 0; i < d_ctx->N; i++)
 		if(a[i] > q2) a[i] -= 2*q2;
-	/*for(i = 0; i < d_ctx->N; i++)
-	{
-		if(a[i] > q2 || a[i] <= -q2)
-		{
-			[> if failure free memory, return 0 <]
-			printf("[NTRU DECRYPT] [%d] FAIL FAIL\n", a[i]);
-			free(ret->polynomial);
-			free(a);
-			return 0;
-		}
-	}*/
-	/*printf("\n");*/
+	
 	/* decryption successful, retrieve plaintext m */
 	/* m = F_p * a mod p */
 	cyclicConvolutionMod(ret->polynomial, d_ctx->F_p, a, d_ctx->N, d_ctx->p);
@@ -1232,11 +1212,11 @@ void NTRU_Encrypt_Preprocess(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **cons, int
 	/* init */
 	int32_t *coeffs = e_ctx->coefficients;
 	int32_t curCoeff = e_ctx->coefficientCount;
-	/* fill with numbers from buffer3 until we have N */
+	/* fill with numbers from buffer3 until we have N-k (then add k checkbits) */
 	while(1)
 	{
 		/* fill coefficients */
-		for(; curCoeff < e_ctx->N; curCoeff++)
+		for(; curCoeff < e_ctx->N - e_ctx->k; curCoeff++)
 		{
 			/* buffer3 cleared ? */
 			if(curBuffer3 == length3) break;
@@ -1250,8 +1230,12 @@ void NTRU_Encrypt_Preprocess(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **cons, int
 		 * cleaned up in NTRU_Encrypt_Preprocess_Final call
 		 * prob it is needed to set trailingZeroBits */
 		if(curBuffer3 == length3) break;
-		/* otherwise push out another container, we have N coeffs! */
+		/* otherwise push out another container, we have N - k coeffs!, add k checkbits */
+		for(; curCoeff < e_ctx->N; curCoeff++)
+			coeffs[curCoeff] = 1;
+		/* reset index for next NTRU polynomial */
 		curCoeff = 0;
+		/* need more memory? */
 		if(currentContainer == containerCount)
 		{
 			containerCount += 1;
@@ -1265,12 +1249,6 @@ void NTRU_Encrypt_Preprocess(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **cons, int
 		/* move coeffs array from e_ctx to ret */
 		ret[currentContainer].polynomial = coeffs;
 
-		/* TODO: DEBUG */
-		/*printf("[UPDATE]\ncurrentContainer: [%d]\npolynomial: [", currentContainer);
-		for(i = 0; i < e_ctx->N; i++)
-			printf("%d ", coeffs[i]);
-		printf("]\n");
-*/
 		/* new coeffs array for e_ctx */
 		coeffs = (int32_t*)malloc(e_ctx->N * sizeof(int32_t));
 		currentContainer++;
@@ -1290,28 +1268,19 @@ void NTRU_Encrypt_Preprocess(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **cons, int
 						sizeof(NTRU_Container));
 		}
 		ret[currentContainer].trailingZeroCoefficients =
-			e_ctx->N - curCoeff;
+			e_ctx->N - e_ctx->k - curCoeff;
 		ret[currentContainer].trailingZeroBits = e_ctx->base3_trailing;
 		/* set trailing coeffs to 0 */
-		for(; curCoeff < e_ctx->N; curCoeff++)
+		for(; curCoeff < e_ctx->N - e_ctx->k; curCoeff++)
 			coeffs[curCoeff] = 0;
+		/* checkbits */
+		for(; curCoeff < e_ctx->N; curCoeff++)
+			coeffs[curCoeff] = 1;
 		ret[currentContainer].polynomial = coeffs;
-
-		/* TODO: DEBUG */
-		/*printf("[FINAL]\ncurrentContainer: [%d]\n", currentContainer);*/
 
 		e_ctx->coefficients = NULL;
 		e_ctx->coefficientCount = 0;
 
-		/* DEBUG ******************************/
-		/*printf("trailingCoeffs: [%d]\n", 
-				ret[currentContainer].trailingZeroCoefficients);
-		[>printf("trailingBits: [%d]\n", e_ctx->base3_trailing)<]
-		printf("Container: [");
-		for(i = 0; i < e_ctx->N; i++)
-			printf("%d ", ret[currentContainer].polynomial[i]);
-		printf("]\n");*/
-		/**************************************/
 		currentContainer++;
 	}
 	else

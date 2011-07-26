@@ -71,8 +71,8 @@ int32_t degree(int32_t *polynomial, int32_t N);
  * f, F_q: private key polynomials
  * h: public key polynomial
  */
-void writePrivate(uint8_t **privatekey, int32_t *privlength, int32_t *f, int32_t *F_q, int32_t N, int32_t p, int32_t q);
-void writePublic(uint8_t **publickey, int32_t *publength, int32_t *h, int32_t N, int32_t p, int32_t q, int32_t d);
+void writePrivate(uint8_t **privatekey, int32_t *privlength, int32_t *f, int32_t *F_q, int32_t N, int32_t p, int32_t q, int32_t k);
+void writePublic(uint8_t **publickey, int32_t *publength, int32_t *h, int32_t N, int32_t p, int32_t q, int32_t d, int32_t k);
 
 /* inverse functions to the both above ones
  * d_ctx, e_ctx: decryption context and encryption context that will

@@ -31,6 +31,8 @@ typedef struct{
 	int32_t q; /* big modul */
 	int32_t d; /* parameter for random polynomial */
 	int32_t *h; /* public key h */
+	/* number of checkbits per NTRU polynomial  */
+	int32_t k;
 	/* current number of bits that aren't yet processed */
 	int32_t base3_currentBits;
 	/* current not yet processed bits */
@@ -51,6 +53,8 @@ typedef struct{
 	int32_t q; /* big modul */
 	int32_t *f; /* private key f */
 	int32_t *F_p; /* almost inverse of f modulo p */
+	/* number of checkbits per NTRU polynomial */
+	int32_t k;
 	/* current number of bits that aren't yet processed */
 	int32_t base3_bits;
 	/* current not yet processed bits */
@@ -121,7 +125,7 @@ void NTRU_GenKeys_LowSec(uint8_t **privatekey, int32_t *privlength, uint8_t **pu
  */
 void NTRU_Encrypt_Init(NTRU_Encrypt_ctx *e_ctx, uint8_t *publickey);
 
-/* Update NTRU Context with chunks of plaintext message to be encrypted
+/* Update NTRU Context with chunks of plaintext messages to be encrypted
  * in out e_ctx: encryption context (contains key and parameters)
  * out cons: contains processed plaintext (polynomials) ready to be encrypted
  *           directly with the NTRU algorithm
@@ -135,7 +139,6 @@ void NTRU_Encrypt_Preprocess_Update(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **co
  * in out e_ctx: encryption context (key and parameters)
  * out cons: contains preprocessed plaintext, ready for encryption
  * out count: number of polynomials
- * TODO: call toBase3 with final = 1
  */
 void NTRU_Encrypt_Preprocess_Final(NTRU_Encrypt_ctx *e_ctx, NTRU_Container **cons, int32_t *count);
 
